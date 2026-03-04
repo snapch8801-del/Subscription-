@@ -1,4 +1,3 @@
-/* style.css - جميع التنسيقات البصرية للوحة */
 :root{
   --bg0:#070a12; --bg1:#0b1020; --card: rgba(255,255,255,.06); --line: rgba(255,255,255,.10);
   --text:#eaf0ff; --muted: rgba(234,240,255,.70); --accent:#7c5cff; --warn:#f59e0b;
@@ -80,7 +79,7 @@ tr.expiring-row{ background: rgba(245,158,11,.06); }
 .auth-sub { color:var(--muted); font-size:13px; margin-bottom: 30px; }
 .auth-input { width:100%; padding:15px 18px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:16px; color:#fff; font-size:15px; outline:none; transition:all 0.2s; text-align: left; direction: ltr; }
 
-/* إعدادات الطباعة للـ PDF الذكي */
+/* إعدادات الطباعة الذكية (PDF المضمون) */
 @media print {
   body.print-mode-receipt > *:not(#receiptModal) { display: none !important; }
   body.print-mode-idcard > *:not(#idCardModal) { display: none !important; }
