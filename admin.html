@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>لوحة تسيير الاشتراكات - الإدارة</title>
+<meta name="theme-color" content="#070a12" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🧾 لوحة تسيير الاشتراكات <span class="version-badge">v13.0.0</span></h1>
+    <div class="sub">⚡ النسخة الاحترافية: إحصائيات بصرية، فواتير PDF عربية، فلترة ديون ذكية، ومزامنة لحظية.</div>
+  </div>
+
+  <div class="card">
+    <div class="topbar">
+      <div class="topbar-actions">
+        <button class="btn soft" type="button" onclick="openSideMenu()" title="الإعدادات والأدوات" style="padding: 10px 14px; font-size: 18px; border-color: rgba(255,255,255,0.2);">☰</button>
+        <button class="btn primary" type="button" onclick="openAddSub()">➕ إضافة عميل</button>
+        <button class="btn primary" type="button" onclick="openScannerModal()" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #059669;">📷 مسح بطاقة</button>
+        <button class="btn soft" type="button" onclick="openModal('packagesModal')" style="border-color:#a855f7; color:#c084fc; background: rgba(168,85,247,0.15); font-weight: 900;">📦 الباقات</button>
+        <button class="btn soft" type="button" onclick="openTotalsReport()">📊 الإحصائيات</button>
+        <div class="statChip sync" id="syncChip"><span class="ico">☁️</span> <span class="v" id="syncVal">—</span></div>
+      </div>
+      <div class="searchWrap">
+        <input id="search" oninput="window.debounceSearch()" placeholder="بحث بالاسم، الإيميل، الوسام، الهاتف..." />
+        <button class="btn soft" title="لصق البحث" style="padding: 10px 12px; border-radius: 12px; font-size: 15px;" onclick="window.pasteSearch()">📋</button>
+        <button class="btn soft" title="مسح البحث" style="padding: 10px 12px; border-radius: 12px; color: var(--err);" onclick="window.clearSearch()">✕</button>
+      </div>
+    </div>
+
+    <div class="bulkBar" id="bulkBar">
+      <div class="selCount" id="selCount">0 محدد</div>
+      <button class="btn" style="border-color:#10b981; color:#10b981; background: rgba(16,185,129,0.1);" onclick="openBulkWhatsAppModal()">💬 رسائل جماعية</button>
+      <button class="btn" style="border-color:var(--accent); color:var(--accent);" onclick="bulkExtendAction()">🔁 تجديد</button>
+      <button class="btn danger" onclick="bulkDeleteAction()">🗑️ حذف</button>
+      <button class="btn soft" style="margin-inline-start:auto;" onclick="clearSelectionAction()">إلغاء التحديد</button>
+    </div>
+
+    <div class="filtersBar" id="filtersBar">
+      <button class="filterBtn active" data-filter="all" onclick="setFilter(this, 'all')">الكل</button>
+      <button class="filterBtn" data-filter="active" onclick="setFilter(this, 'active')">✅ فعّال (زمني/حصص)</button>
+      <button class="filterBtn" data-filter="expiring" onclick="setFilter(this, 'expiring')">⏰ قريب ينتهي</button>
+      <button class="filterBtn" data-filter="expired" onclick="setFilter(this, 'expired')">❌ منتهي الرصيد/المدة</button>
+      <button class="filterBtn" data-filter="debt" onclick="setFilter(this, 'debt')" style="color: #ef4444; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.05); font-weight: 900;">🔴 الديون المعلقة</button>
+    </div>
+
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+            <th>العميل والأوسمة</th> <th>الهاتف</th> <th>الاشتراك</th> <th>المالية</th> <th>التواريخ / الرصيد</th> <th>الحالة</th> <th>إجراء</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div id="paginationControls" class="pagination"></div>
+  </div>
+</div>
+
+<div class="menu-backdrop" id="menuBackdrop" onclick="closeSideMenu()"></div>
+<div class="side-menu" id="sideMenu">
+  <div class="side-menu-header">
+    <h2>⚙️ أدوات وإعدادات</h2>
+    <button class="btn danger btn-close" onclick="closeSideMenu()" style="padding: 6px 12px;">✕</button>
+  </div>
+  <div style="flex:1; overflow-y:auto; padding-right: 5px;">
+    <div class="menu-section-title">إصلاح وحل المشاكل</div>
+    <button class="actBtn" style="color:#60a5fa; border-color:rgba(96,165,250,0.4); background:rgba(96,165,250,0.1);" onclick="window.location.reload(true)">🔄 تفريغ الذاكرة وتحديث الصفحة</button>
+    <div class="menu-section-title">إدارة النظام</div>
+    <button class="actBtn" onclick="closeSideMenu(); openModal('authModal')" style="border-color:var(--accent); color:var(--accent); background: rgba(124,92,255,0.1);">👤 إدارة الحسابات والصلاحيات</button>
+    <div class="menu-section-title">البيانات والحماية</div>
+    <button class="actBtn" style="color:#10b981; border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.1);" onclick="closeSideMenu(); window.exportCSV()">📥 تحميل كملف Excel</button>
+    <button class="actBtn" onclick="closeSideMenu(); openModal('backupModal')">📦 حفظ واسترجاع البيانات</button>
+    <button class="actBtn" onclick="closeSideMenu(); openModal('syncModal')">☁️ المزامنة السحابية</button>
+    <div class="menu-section-title">أدوات إضافية</div>
+    <button class="actBtn" style="color:#f59e0b; border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.1);" onclick="closeSideMenu(); window.undoDelete()">↩️ التراجع عن آخر حذف</button>
+    <button class="actBtn" onclick="closeSideMenu(); window.shareApp()">📤 مشاركة رابط اللوحة</button>
+    <button class="actBtn" onclick="closeSideMenu(); window.print()">🖨️ طباعة الجدول</button>
+    <button class="actBtn" id="btnInstallApp" style="display:none; color:#10b981; border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.1); margin-top:8px;" onclick="window.installPWA()">📲 تثبيت التطبيق على الجهاز</button>
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(239,68,68,0.2);">
+      <button class="actBtn danger" onclick="closeSideMenu(); window.clearAllData()" style="text-align: center;">⚠️ تصفير اللوحة بالكامل</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="formModal" aria-hidden="true">
+  <div class="box" role="dialog" aria-modal="true" style="width:min(600px, 100%)">
+    <div class="modalHeader"><div><h2 id="formTitle">إضافة اشتراك</h2><div class="hint">املأ البيانات الأساسية ثم اضغط حفظ</div></div><button class="btn danger btn-close" type="button" onclick="closeModal('formModal')">✕ إغلاق</button></div>
+    <div class="modalBody">
+      <div class="formGrid">
+        <div class="field full-width" style="background:rgba(124,92,255,0.08); padding:12px 14px; border-radius:14px; border:1px dashed rgba(124,92,255,0.3); margin-bottom:5px;">
+          <label style="color:#c4b5fd; margin-bottom:8px;">📦 اختصار: اختر باقة جاهزة (اختياري)</label>
+          <div style="display:flex; gap:8px;">
+            <select id="packageSelector" onchange="window.applyPackage()" style="background:rgba(0,0,0,0.5); border-color:rgba(124,92,255,0.4); cursor:pointer; flex:1;">
+              <option value="">✍️ لا أريد باقة، سأكتب البيانات بنفسي</option>
+            </select>
+            <button class="btn primary" type="button" style="padding:0 16px; border-radius:12px; font-size:16px;" onclick="openModal('packagesModal')" title="إنشاء باقة جديدة الآن">➕</button>
+          </div>
+        </div>
+        <div class="field full-width"><label>الاسم <span style="color:var(--err)">*</span></label><input id="name" placeholder="مثال: أحمد محمد"></div>
+        <div class="field full-width"><label>الهاتف (مع الرمز)</label><div style="display: flex; gap: 8px;"><select id="countryCode" style="width: 110px; direction: ltr;"><option value="+213">🇩🇿 +213</option><option value="+212">🇲🇦 +212</option><option value="+216">🇹🇳 +216</option><option value="">بدون رمز</option></select><input id="phone" type="tel" dir="ltr" placeholder="555000000" style="flex:1;"></div></div>
+        <div class="field full-width" style="margin-top: 5px;">
+          <label>الخدمة / البرنامج <span style="color:var(--err)">*</span></label>
+          <input id="serviceType" list="serviceList" placeholder="اكتب الخدمة (مثال: رياضيات)">
+          <datalist id="serviceList"><option value="دروس دعم"><option value="نادي رياضي"><option value="نقل مدرسي"></datalist>
+        </div>
+        <div class="field full-width" style="margin-top: 5px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1);">
+          <label>طبيعة الاشتراك وكيفية الحساب <span style="color:var(--err)">*</span></label>
+          <select id="subType" onchange="window.toggleSubType()" style="background:rgba(0,0,0,0.5); border:1px solid #10b981; color:#10b981; font-weight:bold;">
+            <option value="time">⏳ اشتراك زمني (أشهر / تاريخ)</option>
+            <option value="sessions">🎟️ اشتراك بالحصص (رصيد دخول)</option>
+          </select>
+        </div>
+        <div id="timeFieldsGrp" style="display:contents;">
+          <div class="field full-width" style="display: flex; gap:10px; background: rgba(16,185,129,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.2);">
+            <div style="flex:1;"><label>المدة (أشهر)</label><input id="months" type="number" min="1" step="1" style="background: rgba(0,0,0,0.6);"></div>
+            <div style="flex:1;"><label>تاريخ البداية</label><input id="start" type="date" style="background: rgba(0,0,0,0.6);"></div>
+            <div style="flex:1;"><label>اختيار سريع</label><select id="quickPlan" onchange="window.handleQuickPlan()" style="background: rgba(0,0,0,0.6);"><option value="">— اختر —</option><option value="1">1 شهر</option><option value="3">3 أشهر</option><option value="6">6 أشهر</option><option value="12">12 شهر</option></select></div>
+          </div>
+        </div>
+        <div id="sessionsFieldsGrp" style="display:none;">
+          <div class="field full-width" style="display: flex; gap:10px; background: rgba(16,185,129,0.05); padding: 12px; border-radius: 12px; border: 1px solid rgba(16,185,129,0.2);">
+            <div style="flex:1;"><label>إجمالي عدد الحصص</label><input id="sessionsTotal" type="number" min="1" step="1" placeholder="مثال: 12" style="background: rgba(0,0,0,0.6);"></div>
+            <div style="flex:1;"><label>الرصيد المتبقي (للتعديل فقط)</label><input id="sessionsLeft" type="number" min="0" step="1" style="color:var(--warn); font-weight:bold; background: rgba(0,0,0,0.6);"></div>
+          </div>
+        </div>
+        <div class="field full-width" style="display:flex; gap:10px; margin-top:5px;">
+           <div style="flex:1;"><label>السعر الإجمالي</label><input id="price" type="number" min="0" step="0.01" placeholder="5000" oninput="window.calcDebt()"></div>
+           <div style="flex:1;"><label>المدفوع <span style="font-size:10px; font-weight:normal;">(فارغ = دفع الكل)</span></label><input id="paidAmount" type="number" min="0" step="0.01" oninput="window.calcDebt()" title="نوصي باستخدام زر الدفعات في الإجراءات لتسديد الديون"></div>
+        </div>
+        <div class="field full-width"><label>الدين المتبقي (آلي)</label><input id="debtAmount" type="text" readonly style="background: rgba(239,68,68,0.1); color: #ff8a8a; font-weight: bold; border-color: rgba(239,68,68,0.3); pointer-events: none;"></div>
+        <div class="full-width" style="margin-top: 10px;">
+          <button type="button" id="btnToggleAdvanced" class="btn soft" style="width: 100%; border-style: dashed; color: var(--muted); padding: 12px;" onclick="window.toggleAdvancedFields()">
+            🔽 إظهار الخيارات الإضافية (الإيميل، الملاحظات، الأوسمة، الميسنجر...)
+          </button>
+        </div>
+        <div id="advancedFields" class="full-width" style="display: none; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.05); margin-top: 10px;">
+          <div class="formGrid">
+            <div class="field full-width"><label>🔗 رابط المحادثة (ميسنجر / انستغرام / ويب)</label><input id="messengerLink" type="url" dir="ltr" placeholder="https://..." title="انسخ رابط حساب الزبون أو رابط المحادثة والصقه هنا"></div>
+            <div class="field full-width"><label>الإيميل (اختياري)</label><input id="email" placeholder="مثال: name@example.com" inputmode="email"></div>
+            <div class="field full-width"><label>الأوسمة / التصنيفات (مفصولة بفاصلة)</label><input id="tags" placeholder="مثال: سنة 4 متوسط, فوج الأحد, VIP..."></div>
+            <div class="field"><label>تنبيه قبل (أيام)</label><input id="alertDays" type="number" min="1" step="1" value="7"></div>
+            <div class="field full-width"><label>العملة</label><select id="currency"><option value="DZD">DZD</option><option value="EUR">EUR</option><option value="USD">USD</option><option value="MAD">MAD</option><option value="TND">TND</option></select></div>
+            <div class="field full-width"><label>ملاحظات خاصة (لا تظهر للعميل)</label><textarea id="notes" rows="2" placeholder="أرقام سرية، ملاحظات خاصة..."></textarea></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modalFooter"><button class="btn primary" type="button" style="width:100%; padding: 16px; font-size: 16px; font-weight:bold; border-radius:14px; box-shadow: 0 8px 25px rgba(124,92,255,0.2);" onclick="window.saveSubscription()">💾 حفظ بيانات المشترك</button></div>
+  </div>
+</div>
+
+<div class="modal" id="scannerModal" aria-hidden="true">
+  <div class="box" style="width: min(400px, 100%)">
+    <div class="modalHeader"><h2>📷 مسح بطاقة الانخراط</h2><button class="btn danger btn-close" type="button" onclick="closeScannerModal()">✕ إغلاق</button></div>
+    <div class="modalBody" style="text-align: center;">
+      <div id="qr-reader" style="width:100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #fff;"></div>
+      <div id="qr-reader-results" style="margin-top: 15px; font-weight: bold; color: var(--warn);">وجّه الكاميرا نحو الـ QR Code...</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="checkInModal" aria-hidden="true">
+  <div class="box" style="width: min(400px, 100%); text-align:center;">
+    <div class="modalHeader" style="justify-content:center;"><h2>🛂 نقطة الدخول (Check-in)</h2></div>
+    <div class="modalBody" style="padding: 30px 20px;">
+      <h3 id="chkInName" style="font-size:26px; margin:0 0 10px 0; color:var(--text);">الاسم</h3>
+      <div id="chkInService" style="color:var(--muted); font-size: 15px; margin-bottom:20px;">الخدمة</div>
+      <div style="margin-bottom:25px;"><span id="chkInStatus" class="badge" style="font-size: 14px; padding: 8px 16px;">الحالة</span></div>
+      <div id="chkInAlert" style="font-weight:bold; font-size:18px; margin-bottom:25px; padding: 15px; border-radius: 12px; background: rgba(255,255,255,0.05);"></div>
+      <button class="btn primary" id="btnChkInAction" style="width:100%; padding:16px; font-size:16px; font-weight:bold; margin-bottom:15px; border-radius:14px;"></button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn soft" style="flex:1; padding: 12px;" onclick="closeModal('checkInModal'); window.openRowActions(currentRowId)">⚙️ إدارة المشترك</button>
+        <button class="btn danger" style="flex:1; padding: 12px;" onclick="closeModal('checkInModal')">إغلاق النافذة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="packagesModal" aria-hidden="true">
+  <div class="box" style="width: min(600px, 100%)">
+    <div class="modalHeader"><h2>📦 الباقات الجاهزة</h2><button class="btn danger btn-close" type="button" onclick="closeModal('packagesModal')">✕ إغلاق</button></div>
+    <div class="modalBody">
+      <div class="formGrid" style="margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+        <div class="field full-width"><label>اسم الباقة الدلالي</label><input id="pkgName" placeholder="مثال: باقة فيزياء - 4 متوسط"></div>
+        <div class="field full-width"><label>نوع الخدمة</label><input id="pkgService" placeholder="مثال: دروس دعم فيزياء"></div>
+        <div class="field"><label>النوع</label><select id="pkgType"><option value="time">زمني (أشهر)</option><option value="sessions">رصيد (حصص)</option></select></div>
+        <div class="field"><label>القيمة (مدة أو حصص)</label><input id="pkgValue" type="number" min="1" placeholder="مثال: 12"></div>
+        <div class="field"><label>السعر الافتراضي</label><input id="pkgPrice" type="number" min="0" placeholder="15000"></div>
+        <div class="field full-width" style="display:flex; gap:10px;">
+          <button id="btnSavePackage" class="btn primary" style="flex:1; padding:12px; border-radius:12px; text-align: center;" onclick="window.savePackage()">➕ حفظ الباقة</button>
+          <button id="btnCancelPkgEdit" class="btn soft" style="display:none; padding:12px; border-radius:12px; text-align: center; color:var(--err);" onclick="window.cancelEditPackage()">✕ إلغاء التعديل</button>
+        </div>
+      </div>
+      <div style="max-height: 250px; overflow: auto; border: 1px solid var(--line); border-radius: 12px;">
+        <table style="min-width: 100%; font-size: 13px;">
+          <thead style="background: rgba(0,0,0,0.4);"><tr><th>اسم الباقة والخدمة</th><th>النوع/القيمة</th><th>السعر</th><th>إجراء</th></tr></thead>
+          <tbody id="packagesTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="storeSettingsModal" aria-hidden="true">
+  <div class="box" style="width: min(400px, 100%)">
+    <div class="modalHeader"><h2>⚙️ إعدادات المتجر (اللوجو)</h2><button class="btn danger btn-close" type="button" onclick="closeModal('storeSettingsModal')">✕ إغلاق</button></div>
+    <div class="modalBody">
+       <div class="field" style="margin-bottom:15px"><label>اسم المؤسسة / المتجر</label><input id="setStoreName" placeholder="مثال: مؤسسة النجاح"></div>
+       <div class="field" style="margin-bottom:15px"><label>الشعار (Logo)</label><input type="file" id="setStoreLogo" accept="image/*" style="padding: 8px;" onchange="window.handleLogoUpload(event)"></div>
+       <div style="text-align:center; padding:10px; background:rgba(255,255,255,0.05); border-radius:12px;"><div style="font-size:12px; color:var(--muted); margin-bottom:5px;">معاينة الشعار:</div><img id="logoPreview" src="" style="max-width:100px; max-height:100px; border-radius:10px; display:none; margin: 0 auto;"><div id="logoEmojiFallback" style="font-size:40px;">💎</div></div>
+       <button class="btn primary" style="width:100%; margin-top:20px; padding:14px; border-radius:14px; text-align: center;" onclick="window.saveStoreSettings()">💾 حفظ الإعدادات</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="receiptModal" aria-hidden="true">
+  <div class="box" style="width: min(450px, 100%); background: #ffffff; color: #000000; border: none; border-radius: 12px;">
+    <div class="modalHeader no-print" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+      <h2 style="color: #0f172a;">📄 الوصل الرقمي</h2>
+      <button class="btn btn-close" type="button" style="background:#f1f5f9; color:#ef4444; border:1px solid #e2e8f0;" onclick="closeModal('receiptModal')">✕ إغلاق</button>
+    </div>
+    <div class="modalBody receipt-content" style="padding: 30px 25px; font-family: Tahoma, Arial, sans-serif; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 25px;">
+        <img id="receiptLogoImg" src="" style="display:none; max-width:80px; max-height:80px; border-radius:12px; margin:0 auto 10px;">
+        <div id="receiptLogoEmoji" style="font-size: 40px; margin-bottom: 5px;">💎</div>
+        <h1 id="receiptStoreName" style="margin: 0; font-size: 24px; color: #4f46e5; font-weight: 900;">المؤسسة</h1>
+        <div style="color: #64748b; font-size: 13px; margin-top: 5px;">فاتورة اشتراك إلكترونية</div>
+      </div>
+      
+      <div style="font-size: 15px;">
+        <div class="flex-row-receipt"><span class="label">اسم العميل:</span><strong class="val" id="recName"></strong></div>
+        <div class="flex-row-receipt"><span class="label">رقم الهاتف:</span><span class="val" style="direction: ltr;" id="recPhone"></span></div>
+        <div class="flex-row-receipt"><span class="label">نوع الخدمة:</span><strong class="val" style="color: #8b5cf6;" id="recService"></strong></div>
+        
+        <div id="recRowMonths" class="flex-row-receipt" style="display:none;"><span class="label">مدة الاشتراك:</span><span class="val" id="recMonths"></span></div>
+        <div id="recRowSessions" class="flex-row-receipt" style="display:none;"><span class="label">رصيد الحصص:</span><strong class="val" id="recSessions"></strong></div>
+        <div id="recRowStart" class="flex-row-receipt" style="display:none;"><span class="label">تاريخ البداية:</span><span class="val" id="recStart"></span></div>
+        <div id="recRowEnd" class="flex-row-receipt" style="display:none; border-bottom: 1px solid #cbd5e1;"><span class="label">تاريخ الانتهاء:</span><span class="val" id="recEnd"></span></div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 0 10px 0;">
+          <span style="color: #0f172a; font-size: 18px; font-weight: 900;">السعر الإجمالي:</span>
+          <strong style="color: #10b981; font-size: 20px;" id="recPrice"></strong>
+        </div>
+
+        <div class="flex-row-receipt" style="padding: 10px 0;"><span class="label">حالة الدفع:</span><strong class="val" id="recPaymentStatus"></strong></div>
+        <div id="recPaidAmountRow" class="flex-row-receipt" style="display:none; padding: 10px 0;"><span class="label">إجمالي المدفوع:</span><strong class="val" style="color: #3b82f6;" id="recPaidAmount"></strong></div>
+        <div id="recRemainingRow" style="display:none; justify-content: space-between; background:#fef2f2; border-bottom: 1px dashed #cbd5e1; padding: 12px 5px; border-radius: 8px;">
+          <span style="color: #ef4444; font-weight:bold;">❗ المبلغ المتبقي (دين):</span><strong style="color: #ef4444; font-size: 16px;" id="recRemaining"></strong>
+        </div>
+      </div>
+      
+      <div id="receiptPaymentLogSection" style="display:none; margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+         <div style="font-size: 12px; color: #64748b; margin-bottom: 8px; font-weight: bold;">سجل الدفعات بالتفصيل:</div>
+         <div id="receiptPaymentLogList"></div>
+      </div>
+
+      <div style="text-align: center; margin-top: 35px; font-size: 12px; color: #94a3b8; line-height: 1.6;">نشكركم على ثقتكم بنا 🤍<br><span style="font-size: 10px;">تم الإصدار بتاريخ <span id="recToday"></span></span></div>
+    </div>
+    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #4f46e5; border-color: #4338ca; text-align: center;" onclick="window.printReceiptAction()">🖨️ طباعة أو حفظ PDF</button>
+      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #f59e0b; border-color: #d97706; text-align: center;" onclick="window.downloadReceiptPDF()">📥 تحميل كـ PDF (HD)</button>
+      <button class="btn primary" style="width: 100%; padding: 12px; font-size: 13px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppReceipt()">💬 إرسال واتساب</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="idCardModal" aria-hidden="true">
+  <div class="box" style="width: min(420px, 100%); background: #ffffff; color: #000000; border: none; border-radius: 16px;">
+    <div class="modalHeader no-print" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+      <h2 style="color: #0f172a;">🪪 بطاقة الانخراط</h2>
+      <button class="btn btn-close" type="button" style="background:#f1f5f9; color:#ef4444; border:1px solid #e2e8f0;" onclick="closeModal('idCardModal')">✕ إغلاق</button>
+    </div>
+    <div class="modalBody id-card-content" style="padding: 25px; font-family: Tahoma, Arial, sans-serif; background: #ffffff; display: flex; justify-content: center;">
+      <div class="id-card-wrap" style="width: 100%; max-width: 350px;">
+        <h2 id="idCardStoreName" style="margin: 0 0 5px 0; color: #4f46e5; font-size: 22px;">المؤسسة</h2>
+        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 20px; letter-spacing: 1px;">بطاقة عضوية رقمية - MEMBERSHIP CARD</div>
+        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+          <div id="idCardQR" style="padding: 10px; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; display: inline-block;"></div>
+        </div>
+        <h3 id="idCardClientName" style="margin: 0 0 5px 0; font-size: 24px; font-weight: 900;">الاسم</h3>
+        <div id="idCardService" style="font-weight: bold; color: #8b5cf6; font-size: 15px; margin-bottom: 15px; background: rgba(139,92,246,0.1); display: inline-block; padding: 4px 12px; border-radius: 99px;">الخدمة</div>
+        <div style="display: flex; justify-content: space-between; font-size: 13px; border-top: 1px dashed #cbd5e1; padding-top: 15px; text-align: right;">
+           <div style="flex:1;">
+             <span style="color:#64748b; display:block; font-size: 11px;">نوع الاشتراك</span>
+             <strong id="idCardType" style="font-size: 14px;">...</strong>
+           </div>
+           <div style="flex:1; text-align: left;">
+             <span style="color:#64748b; display:block; font-size: 11px;">الحالة / الرصيد</span>
+             <strong id="idCardStatus" style="font-size: 14px;">...</strong>
+           </div>
+        </div>
+      </div>
+    </div>
+    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 16px 16px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #0f172a; border-color: #000; text-align: center;" onclick="window.printIdCardAction()">🖨️ طباعة أو حفظ PDF</button>
+      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #f59e0b; border-color: #d97706; text-align: center;" onclick="window.downloadIdCardPDF()">📥 حفظ كـ PDF (HD)</button>
+      <button class="btn primary" style="width: 100%; padding: 12px; font-size: 13px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppIdCard()">💬 إرسال واتساب</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="extendModal" aria-hidden="true"><div class="box" style="width: min(350px, 100%)"><div class="modalHeader"><h2 id="extendTitle">تجديد الاشتراك</h2><button class="btn danger btn-close" type="button" onclick="closeModal('extendModal')">✕ إغلاق</button></div><div class="modalBody"><div class="field" style="margin-bottom:15px"><label id="lblExtendValue">المدة المضافة</label><input id="extendValue" type="number" min="1" value="1"></div><div class="field" style="margin-bottom:20px" id="grpExtendUnit"><label>الوحدة</label><select id="extendUnit"><option value="months">أشهر</option><option value="days">أيام</option></select></div><button class="btn primary" style="width:100%; text-align: center;" onclick="window.confirmExtend()">تأكيد التجديد</button></div></div></div>
+<div class="modal" id="paymentModal" aria-hidden="true"><div class="box" style="width: min(450px, 100%)"><div class="modalHeader"><h2>💸 إدارة الدفعات</h2><button class="btn danger btn-close" type="button" onclick="closeModal('paymentModal'); openModal('rowActionsModal')">العودة ↩</button></div><div class="modalBody"><div style="margin-bottom: 15px; font-weight: bold; color: var(--text); font-size: 16px;" id="paymentClientName"></div><div style="display: flex; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.05);"><div style="text-align: center;"><span style="font-size:11px; color:var(--muted); display:block;">السعر الإجمالي</span><strong id="payTotal" style="color:var(--text); font-size:15px;"></strong></div><div style="text-align: center;"><span style="font-size:11px; color:var(--muted); display:block;">إجمالي المدفوع</span><strong id="payPaid" style="color:#10b981; font-size:15px;"></strong></div><div style="text-align: center;"><span style="font-size:11px; color:var(--muted); display:block;">المتبقي (دين)</span><strong id="payDebt" style="color:#ef4444; font-size:15px;"></strong></div></div><div id="newPaymentWrap"><div class="field" style="display:flex; gap:10px; margin-bottom:15px;"><input id="newPaymentAmount" type="number" min="1" step="0.01" placeholder="أدخل مبلغ الدفعة الجديدة..." style="flex:1;"><button class="btn primary" onclick="window.confirmNewPayment()" style="background: #10b981; border-color: #059669;">➕ تسديد</button></div></div><div style="font-size:12px; color:var(--accent); margin-bottom:8px; font-weight:bold;">سجل الدفعات السابقة:</div><div style="max-height: 200px; overflow: auto; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);"><table style="width: 100%; font-size: 13px; border-collapse: collapse;"><thead style="background: rgba(255,255,255,0.05);"><tr><th style="padding: 10px; text-align: right; color: var(--muted);">التاريخ والوقت</th><th style="padding: 10px; text-align: left; color: var(--muted);">الدفعة المالية</th></tr></thead><tbody id="paymentTbody"></tbody></table></div></div></div></div>
+<div class="modal" id="attendanceModal" aria-hidden="true"><div class="box" style="width: min(450px, 100%)"><div class="modalHeader"><h2>📅 سجل الحضور والدخول</h2><button class="btn danger btn-close" type="button" onclick="closeModal('attendanceModal'); openModal('rowActionsModal')">العودة ↩</button></div><div class="modalBody"><div style="margin-bottom: 15px; font-weight: bold; color: var(--accent); font-size: 18px;" id="attendanceClientName"></div><div style="max-height: 300px; overflow: auto; background: rgba(0,0,0,0.3); border-radius: 14px; border: 1px solid rgba(255,255,255,0.1);"><table style="width: 100%; font-size: 13px;"><thead style="background: rgba(255,255,255,0.05);"><tr><th style="padding: 10px;">#</th><th style="padding: 10px; text-align: right;">التاريخ</th><th style="padding: 10px; text-align: left;">الوقت</th></tr></thead><tbody id="attendanceTbody"></tbody></table></div></div></div></div>
+<div class="modal" id="rowActionsModal" aria-hidden="true">
+  <div class="box" role="dialog" aria-modal="true" style="width: min(400px, 100%)">
+    <div class="modalHeader"><div><h2 style="font-size: 16px;">⚡ إجراءات المشترك</h2><div class="hint" id="rowActionsHint" style="color: var(--accent); font-weight: bold; font-size: 14px;">—</div></div><button class="btn danger btn-close" type="button" onclick="closeModal('rowActionsModal')" style="padding: 6px 12px;">✕</button></div>
+    <div class="modalBody" style="padding: 20px;">
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;"><button class="btn primary" style="padding: 14px; font-size: 15px; font-weight: bold; box-shadow: 0 4px 15px rgba(124,92,255,0.2);" onclick="window.actExtendAction()">🔁 تجديد الاشتراك (رصيد / مدة)</button><button class="btn" style="padding: 14px; font-size: 15px; font-weight: bold; color: #fff; background: linear-gradient(135deg, #3b82f6, #2563eb); border-color: #2563eb; box-shadow: 0 4px 15px rgba(59,130,246,0.2);" onclick="window.openMembershipCard()">🪪 عرض بطاقة الانخراط (QR)</button></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;"><button class="btn soft" style="color: #4ade80; border-color: rgba(37,211,102,.3); background: rgba(37,211,102,.1);" onclick="window.actWhatsAppAction()">💬 واتساب</button><button class="btn soft" id="btnMessengerAction" style="color: #0ea5e9; border-color: rgba(14,165,233,.3); background: rgba(14,165,233,.1);" onclick="window.actMessengerAction()">💬 ميسنجر / انستا</button></div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;"><button class="btn soft" style="color: #f43f5e; border-color: rgba(244,63,94,.3); background: rgba(244,63,94,.1);" onclick="window.actSMSAction()">📱 رسالة SMS</button><button class="btn soft" style="color: #60a5fa; border-color: rgba(96,165,250,.3); background: rgba(96,165,250,.1);" onclick="window.openReceiptAction()">📄 إصدار فاتورة</button></div>
+      <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; padding-top: 15px; border-top: 1px dashed rgba(255,255,255,0.1);"><button class="btn soft" style="font-size: 12px; padding: 8px 14px; border-radius: 10px;" onclick="window.actEditAction()">✏️ تعديل</button><button class="btn soft" id="btnViewNotes" style="font-size: 12px; padding: 8px 14px; border-radius: 10px; color: #a855f7; border-color: rgba(168,85,247,.3);" onclick="window.openNotesAction()">📝 الملاحظات</button><button class="btn soft" style="font-size: 12px; padding: 8px 14px; border-radius: 10px;" onclick="window.actCopyEmailAction()">📋 نسخ Email</button><button class="btn soft" id="btnViewAttendance" style="font-size: 12px; padding: 8px 14px; border-radius: 10px; color: #10b981; border-color: rgba(16,185,129,.3);" onclick="window.openAttendanceLog()">📅 سجل الحضور</button><button class="btn soft" style="font-size: 12px; padding: 8px 14px; border-radius: 10px; color: #fbbf24; border-color: rgba(251,191,36,.3);" onclick="window.openPaymentModal()">💸 الدفعات والديون</button></div>
+      <div style="padding-top: 15px; border-top: 1px solid rgba(239,68,68,0.2);"><button type="button" class="btn soft" style="font-size:12px; padding:12px; color:#c084fc; width:100%; border-color:#c084fc; background: rgba(192,132,252,0.1); margin-bottom: 10px; font-weight:bold;" onclick="window.generatePortalLink()">🌐 استخراج رابط بوابة العميل</button><button class="btn danger" style="width: 100%; padding: 12px; border-radius: 12px; font-size: 13px;" onclick="window.actDeleteAction()">🗑️ حذف المشترك نهائياً</button></div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="viewNotesModal" aria-hidden="true"><div class="box" style="width: min(400px, 100%)"><div class="modalHeader"><h2>📝 ملاحظات العميل</h2><button class="btn danger btn-close" type="button" onclick="closeModal('viewNotesModal'); openModal('rowActionsModal')">العودة ↩</button></div><div class="modalBody"><div id="viewNotesContent" style="white-space: pre-wrap; line-height: 1.6; color: var(--text); background: rgba(0,0,0,0.3); padding: 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.1); font-size:14px; min-height:80px;"></div></div></div></div>
+<div class="modal" id="bulkWhatsAppModal" aria-hidden="true"><div class="box" style="width: min(450px, 100%)"><div class="modalHeader"><h2>💬 رسائل واتساب الجماعية</h2><button class="btn danger btn-close" type="button" onclick="closeModal('bulkWhatsAppModal')">✕ إغلاق</button></div><div class="modalBody"><div style="margin-bottom:15px; background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); padding:12px; border-radius:12px; color:#c8f7d9; font-size:13px; line-height:1.5;">سيتم عرض المشتركين واحداً تلو الآخر لتتمكن من إرسال الرسائل بشكل آمن.<div style="margin-top:8px; border-top:1px dashed rgba(34,197,94,0.3); padding-top:8px;"><b>عدد المستلمين:</b> <span id="bulkWaCount" style="font-weight:bold; font-size:16px;">0</span> مشترك (يملكون أرقام)</div></div><div class="field" style="margin-bottom:15px"><label>نص الرسالة (تتغير تلقائياً لكل عميل)</label><div style="font-size:11px; color:var(--muted); margin-bottom:8px; direction:ltr; text-align:right;">المتغيرات المتاحة: <code style="background:rgba(255,255,255,0.1); padding:2px 4px; border-radius:4px;">{name}</code> , <code style="background:rgba(255,255,255,0.1); padding:2px 4px; border-radius:4px;">{end}</code> , <code style="background:rgba(255,255,255,0.1); padding:2px 4px; border-radius:4px;">{service}</code></div><textarea id="bulkWaMsg" rows="4">مرحباً {name}، نود تذكيرك بانتهاء اشتراكك / رصيدك في {service}. يرجى التجديد لتفادي الانقطاع.</textarea></div><div style="text-align:center; padding:15px 0; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid rgba(255,255,255,0.05);"><div id="bulkWaCurrentTarget" style="font-weight:bold; font-size:15px; margin-bottom:12px; color:var(--text);">العميل التالي: -</div><button class="btn primary" id="btnSendNextWa" style="width:90%; padding:14px; font-size:15px; background:#22c55e; border-color:#16a34a; box-shadow: 0 8px 25px rgba(34,197,94,0.2); text-align: center;" onclick="window.sendNextBulkWhatsApp()">إرسال الرسالة 🚀</button></div></div></div></div>
+<div class="modal" id="authModal" aria-hidden="true"><div class="box" style="width: min(420px, 100%); padding:0;"><div class="modalHeader" style="border-bottom:none; padding-bottom:0;"><button class="btn danger btn-close" type="button" id="closeAuthBtn" onclick="closeModal('authModal')" style="display:none; margin-inline-start:auto;">✕ إغلاق</button></div><div class="modalBody" style="padding-top:0;"><div id="authLoginSection" class="auth-wrap"><div class="auth-icon-wrap">🔒</div><h2 class="auth-title">تسجيل الدخول</h2><div class="auth-sub">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</div><div style="margin-bottom:20px;"><label class="auth-label">البريد الإلكتروني</label><input id="authEmailAuth" type="email" class="auth-input" placeholder="admin@example.com"></div><div style="margin-bottom:30px;"><label class="auth-label">كلمة المرور</label><input id="authPass" type="password" class="auth-input" placeholder="••••••••"></div><button class="btn primary" style="width:100%; padding:16px; font-size:16px; font-weight:900; border-radius:16px; box-shadow: 0 8px 25px rgba(124,92,255,0.3); text-align: center;" onclick="window.loginUser()">دخول 🚀</button></div><div id="authLoggedInSection" style="display:none; padding:10px;"><div style="text-align:center; margin-bottom:25px;"><div id="authStatusIcon" class="auth-icon-wrap" style="background:linear-gradient(135deg, rgba(34,197,94,0.2), rgba(34,197,94,0.05)); border-color:rgba(34,197,94,0.3); box-shadow: 0 10px 25px rgba(34,197,94,0.15);">✅</div><div id="authStateText" style="font-weight:900; font-size:15px; line-height:1.6;"></div></div><div id="ownerDashboard" style="display:none; padding:20px; background:rgba(124,92,255,0.08); border-radius:18px; border:1px solid rgba(124,92,255,0.2); margin-bottom:25px;"><h3 style="margin-top:0; color:#fff; font-size:15px; display:flex; align-items:center; gap:8px;">👑 أدوات المالك (Owner)</h3><button class="btn soft" onclick="closeModal('authModal'); openModal('storeSettingsModal')" style="width:100%; margin-bottom:12px; padding:12px; border-radius:12px; border-color:rgba(16,185,129,0.3); color:#10b981; text-align: center;">⚙️ إعدادات المتجر (الاسم واللوجو)</button><button class="btn primary" onclick="closeModal('authModal'); openModal('addAdminModal')" style="width:100%; margin-bottom:12px; padding:12px; border-radius:12px; text-align: center;">➕ إنشاء حساب مستخدم جديد</button><button class="btn soft" onclick="closeModal('authModal'); window.loadAdminsList()" style="width:100%; padding:12px; border-radius:12px; border-color:rgba(255,255,255,0.1); text-align: center;">👥 إدارة الصلاحيات للمستخدمين</button><button class="btn soft" onclick="closeModal('authModal'); window.openAuditLog()" style="width:100%; padding:12px; border-radius:12px; border-color:rgba(245,158,11,0.3); color:#f59e0b; margin-top:12px; text-align: center;">🕵️‍♂️ سجل نشاطات المدراء</button></div><button class="btn danger" style="width:100%; padding:14px; border-radius:14px; font-size:15px; text-align: center;" onclick="window.logoutUser()">تسجيل الخروج المآمن</button></div></div></div></div>
+<div class="modal" id="addAdminModal" aria-hidden="true"><div class="box" style="width: min(380px, 100%)"><div class="modalHeader"><h2>➕ إضافة مستخدم جديد</h2><button class="btn danger btn-close" type="button" onclick="closeModal('addAdminModal')">✕ إغلاق</button></div><div class="modalBody"><div class="field" style="margin-bottom:15px"><label>البريد الإلكتروني</label><input id="newAdminEmail" type="email"></div><div class="field" style="margin-bottom:15px"><label>كلمة المرور (6 أحرف أو أكثر)</label><input id="newAdminPass" type="password"></div><div class="field" style="margin-bottom:25px"><label>نوع الصلاحية</label><select id="newAdminRole"><option value="admin">أدمن</option><option value="owner">مالك 👑</option></select></div><button class="btn primary" style="width:100%; padding:12px; text-align: center;" onclick="window.confirmAddAdmin()">تأكيد وإنشاء الحساب</button></div></div></div>
+<div class="modal" id="manageAdminsModal" aria-hidden="true"><div class="box" style="width: min(500px, 100%)"><div class="modalHeader"><h2>👥 قائمة المستخدمين</h2><button class="btn danger btn-close" type="button" onclick="closeModal('manageAdminsModal')">✕ إغلاق</button></div><div class="modalBody"><div style="font-size:12px; color:var(--warn); margin-bottom:15px; padding:10px; background:rgba(245,158,11,0.1); border-radius:10px; border:1px solid rgba(245,158,11,0.3);"><b>ملاحظة هامة:</b> سحب الصلاحية يمنع المستخدم من الدخول للوحة.</div><div style="max-height:300px; overflow:auto;"><table style="min-width:100%;"><thead><tr><th>الإيميل</th><th>الصلاحية</th><th>إجراء</th></tr></thead><tbody id="adminsTbody"></tbody></table></div></div></div></div>
+<div class="modal" id="auditLogModal" aria-hidden="true"><div class="box" style="width: min(700px, 100%)"><div class="modalHeader"><h2>🕵️‍♂️ سجل نشاطات المدراء</h2><div style="display:flex; gap:10px;"><button class="btn danger" id="deleteSelectedLogsBtn" style="display:none; padding:8px 12px; font-size:12px;" onclick="window.deleteSelectedLogs()">🗑️ حذف المحدد</button><button class="btn danger btn-close" type="button" onclick="closeModal('auditLogModal')">✕ إغلاق</button></div></div><div class="modalBody"><div style="max-height:400px; overflow:auto; border:1px solid rgba(255,255,255,0.1); border-radius:12px;"><table style="min-width:100%; font-size: 13px;"><thead style="background: rgba(0,0,0,0.4);"><tr><th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllLogs" onchange="window.toggleAllLogs(event)"></th><th>الوقت والتاريخ</th><th>المستخدم (الأدمن)</th><th>نوع الإجراء</th><th>التفاصيل</th></tr></thead><tbody id="auditTbody"></tbody></table></div></div></div></div>
+<div class="modal" id="backupModal" aria-hidden="true"><div class="box" style="width:min(400px, 100%)"><div class="modalHeader"><h2>📦 النسخ الاحتياطي (JSON)</h2><button class="btn danger btn-close" type="button" onclick="closeModal('backupModal')">✕ إغلاق</button></div><div class="modalBody"><div style="display:grid; gap:10px;"><button class="btn soft" onclick="window.exportJson()" style="text-align: center;">⬇️ تصدير نسخة JSON</button><button class="btn soft" onclick="window.importFile()" style="text-align: center;">⬆️ استيراد نسخة JSON</button><input id="fileInput" type="file" accept=".json" style="display:none" onchange="window.handleFileSelect(event)"><button class="btn soft" onclick="closeModal('backupModal'); openModal('pasteModal')" style="text-align: center;">📋 استيراد باللصق</button></div></div></div></div>
+<div class="modal" id="pasteModal" aria-hidden="true"><div class="box"><div class="modalHeader"><h2>📋 استيراد باللصق</h2><button class="btn danger btn-close" type="button" onclick="closeModal('pasteModal')">✕ إغلاق</button></div><div class="modalBody"><textarea id="pasteArea" rows="10" style="width:100%; background:rgba(0,0,0,0.3); color:white; border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:10px; outline:none;"></textarea></div><div class="modalFooter"><button class="btn primary" style="text-align: center;" onclick="window.confirmPaste()">استيراد البيانات</button></div></div></div>
+<div class="modal" id="syncModal" aria-hidden="true"><div class="box"><div class="modalHeader"><h2>☁️ المزامنة والنسخ الاحتياطي</h2><button class="btn danger btn-close" type="button" onclick="closeModal('syncModal')">✕ إغلاق</button></div><div class="modalBody">ميزة المزامنة تعمل في الخلفية لحظياً وبشكل تلقائي ✅</div></div></div>
+<div class="modal" id="totalsModal" aria-hidden="true">
+  <div class="box" style="width:min(700px, 100%)">
+    <div class="modalHeader"><h2>📊 المجموع العام والإحصائيات</h2><button class="btn danger btn-close" type="button" onclick="closeModal('totalsModal')">✕ إغلاق</button></div>
+    <div class="modalBody">
+      <div id="totalsBody" style="text-align:center; padding: 10px 0;"></div>
+      <div class="actGrid" style="margin-top: 20px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 20px;">
+        <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);"><canvas id="financeChart"></canvas></div>
+        <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05);"><canvas id="servicesChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
