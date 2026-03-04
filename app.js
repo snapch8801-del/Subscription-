@@ -44,8 +44,8 @@ window.addEventListener('offline', () => {
 const FIREBASE_CONFIG = { apiKey: "AIzaSyAQPzqeazhj4rjyY1dbcGZ9YEAv8ZhLQbQ", authDomain: "dattta-6f497.firebaseapp.com", databaseURL: "https://dattta-6f497-default-rtdb.firebaseio.com", projectId: "dattta-6f497", storageBucket: "dattta-6f497.firebasestorage.app", messagingSenderId: "804914291938", appId: "1:804914291938:web:7a7d3fe8a5ebb28a306abb" };
 const BASE_APP_TITLE = "لوحة تسيير الاشتراكات - الإدارة"; 
 const $ = (id)=>document.getElementById(id); 
-const LOCAL_BACKUP_KEY = "subs_local_backup_v12";
-const LOCAL_PACKAGES_KEY = "subs_packages_backup_v12";
+const LOCAL_BACKUP_KEY = "subs_local_backup_v13";
+const LOCAL_PACKAGES_KEY = "subs_packages_backup_v13";
 
 let data = []; let packagesData = []; let editingId = null; let currentRowId = null; let currentFilter = "all"; 
 let selectedIds = new Set(); let extendMode = "single"; let currentUser = null; let currentRole = null;
@@ -437,6 +437,14 @@ window.openRowActions = (id) => {
 
 window.openMembershipCard = () => {
   const rec = data.find(x => x.id === currentRowId); if(!rec) return; closeModal("rowActionsModal");
+  
+  // تسمية ديناميكية لملف الطباعة (الاسم + التاريخ + الوقت)
+  const cName = (rec.name || "عميل").replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').trim().replace(/\s+/g, '_'); 
+  const d = new Date(); 
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const timeStr = `${String(d.getHours()).padStart(2,'0')}-${String(d.getMinutes()).padStart(2,'0')}`;
+  document.title = `بطاقة_${cName}_${dateStr}_${timeStr}`;
+
   $("idCardStoreName").textContent = storeSettings.name || "المؤسسة"; $("idCardClientName").textContent = rec.name || "-"; $("idCardService").textContent = rec.serviceType || "غير محدد";
   let alertD = parseInt($("alertDays")?.value) || 7; let st = getStatus(rec, alertD);
   $("idCardStatus").textContent = st.label; $("idCardStatus").style.color = st.cls === 'ok' ? '#10b981' : (st.cls === 'warn' ? '#f59e0b' : '#ef4444');
@@ -547,8 +555,15 @@ window.saveSubscription = async () => {
 
 window.openReceiptAction = () => {
   const rec = data.find(x => x.id === currentRowId); if(!rec) return; closeModal("rowActionsModal"); 
-  const sName = (storeSettings.name || "متجر_الاشتراكات").replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').trim().replace(/\s+/g, '_'); const cName = (rec.name || "عميل").replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').trim().replace(/\s+/g, '_'); const d = new Date(); const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  document.title = `فاتورة_${sName}_${cName}_${dateStr}`;
+  
+  // تسمية ديناميكية للملف (الاسم + التاريخ + الوقت)
+  const sName = (storeSettings.name || "المؤسسة").replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').trim().replace(/\s+/g, '_'); 
+  const cName = (rec.name || "عميل").replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').trim().replace(/\s+/g, '_'); 
+  const d = new Date(); 
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const timeStr = `${String(d.getHours()).padStart(2,'0')}-${String(d.getMinutes()).padStart(2,'0')}`;
+  document.title = `فاتورة_${sName}_${cName}_${dateStr}_${timeStr}`;
+
   $("receiptStoreName").textContent = storeSettings.name || "المؤسسة";
   if(storeSettings.logo) { $("receiptLogoImg").src = storeSettings.logo; $("receiptLogoImg").style.display = "block"; $("receiptLogoEmoji").style.display = "none"; } else { $("receiptLogoImg").style.display = "none"; $("receiptLogoEmoji").style.display = "block"; }
   $("recName").textContent = rec.name || "-"; $("recPhone").textContent = rec.phone ? `${rec.countryCode||''}${rec.phone}` : "-"; $("recService").textContent = rec.serviceType || "غير محدد"; 
@@ -576,12 +591,12 @@ window.openReceiptAction = () => {
   $("recToday").textContent = `${d.toLocaleDateString('en-GB')} - ${d.toLocaleTimeString('en-GB')}`; logAction("إصدار وصل", `للعميل: ${rec.name}`); openModal("receiptModal"); 
 };
 
-// وظائف الإرسال والطباعة المدمجة
+// وظائف الإرسال عبر الواتساب
 window.sendWhatsAppReceipt = () => {
     const rec = data.find(x => x.id === currentRowId);
     if(!rec || !rec.phone) return showToast("لا يوجد هاتف مسجل لهذا العميل.", "err");
     let cleanPhone = ((rec.countryCode||'')+rec.phone).replace(/[^0-9+]/g, '');
-    let msg = `مرحباً ${rec.name} 📄\nمرفق تفاصيل اشتراكك في (${rec.serviceType}).\n- السعر الإجمالي: ${rec.price||0} ${rec.currency||'DZD'}\n- ما تم دفعه: ${rec.paidAmount||0}\n\nشكراً لثقتكم بنا. (يمكنك إرسال ملف الـ PDF أو الصورة هنا)`;
+    let msg = `مرحباً ${rec.name} 📄\nمرفق تفاصيل اشتراكك في (${rec.serviceType}).\n- السعر الإجمالي: ${rec.price||0} ${rec.currency||'DZD'}\n- ما تم دفعه: ${rec.paidAmount||0}\n\nشكراً لثقتكم بنا. (يمكنك إرسال ملف الـ PDF هنا)`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
@@ -589,10 +604,11 @@ window.sendWhatsAppIdCard = () => {
     const rec = data.find(x => x.id === currentRowId);
     if(!rec || !rec.phone) return showToast("لا يوجد هاتف مسجل لهذا العميل.", "err");
     let cleanPhone = ((rec.countryCode||'')+rec.phone).replace(/[^0-9+]/g, '');
-    let msg = `مرحباً ${rec.name} 🪪\nتم إصدار بطاقة الانخراط الرقمية الخاصة بك لخدمة (${rec.serviceType}).\nيرجى إبراز البطاقة عند الدخول.\n\n(يمكنك إرسال ملف الـ PDF أو الصورة هنا)`;
+    let msg = `مرحباً ${rec.name} 🪪\nتم إصدار بطاقة الانخراط الرقمية الخاصة بك لخدمة (${rec.serviceType}).\nيرجى إبراز البطاقة عند الدخول.\n\n(يمكنك إرسال ملف الـ PDF هنا)`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
 };
 
+// وظائف الطباعة المدمجة (متوافقة مع الهواتف والحاسوب)
 window.printReceiptAction = () => { 
     document.body.classList.add("print-mode-receipt"); 
     $("receiptModal").classList.add("print-active"); 
@@ -613,56 +629,7 @@ window.printIdCardAction = () => {
     }, 500); 
 };
 
-// دوال تصدير الـ PDF الجديدة والمضمونة للعربية (عبر html-to-image)
-window.downloadReceiptPDF = () => {
-    const element = document.querySelector('.receipt-content');
-    const clientName = ($("recName").textContent || "Client").replace(/\s+/g, '_');
-    showToast("جاري تجهيز الفاتورة... ⏳", "ok");
-    
-    element.querySelectorAll('canvas').forEach(c => {
-        const img = new Image(); img.src = c.toDataURL(); img.style.cssText = c.style.cssText;
-        c.parentNode.replaceChild(img, c);
-    });
-
-    htmlToImage.toPng(element, { backgroundColor: '#ffffff', pixelRatio: 2 })
-        .then(function (dataUrl) {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a5');
-            const imgProps = pdf.getImageProperties(dataUrl);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`Invoice_${clientName}.pdf`);
-            showToast("تم تحميل الفاتورة بنجاح 📥", "ok");
-        })
-        .catch(err => { console.error(err); showToast("حدث خطأ أثناء التوليد", "err"); });
-};
-
-window.downloadIdCardPDF = () => {
-    const element = document.querySelector('.id-card-content');
-    const clientName = ($("idCardClientName").textContent || "Client").replace(/\s+/g, '_');
-    showToast("جاري تجهيز البطاقة... ⏳", "ok");
-    
-    element.querySelectorAll('canvas').forEach(c => {
-        const img = new Image(); img.src = c.toDataURL(); img.style.cssText = c.style.cssText;
-        img.style.width = "100%"; 
-        c.parentNode.replaceChild(img, c);
-    });
-
-    htmlToImage.toPng(element, { backgroundColor: '#ffffff', pixelRatio: 3 })
-        .then(function (dataUrl) {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a6');
-            const imgProps = pdf.getImageProperties(dataUrl);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-            pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`MembershipCard_${clientName}.pdf`);
-            showToast("تم تحميل البطاقة بنجاح 📥", "ok");
-        })
-        .catch(err => { console.error(err); showToast("حدث خطأ أثناء التوليد", "err"); });
-};
-
+// وظيفة الإحصائيات (الرسوم البيانية)
 let financeChartInstance = null;
 let servicesChartInstance = null;
 
@@ -745,7 +712,7 @@ window.openTotalsReport = () => {
               options: { plugins: { legend: { labels: { color: '#eaf0ff', font: { family: 'system-ui' } }, position: 'bottom' }, title: { display: true, text: 'توزيع المشتركين حسب الخدمات', color: '#a78bfa', font: {size: 14} } } }
           });
       }
-  }, 100);
+  }, 100); 
 };
 
 window.exportCSV = () => { 
