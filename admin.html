@@ -9,8 +9,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -21,8 +19,8 @@
 <body>
 <div class="container">
   <div class="header">
-    <h1>🧾 لوحة تسيير الاشتراكات <span class="version-badge">v13.0.0</span></h1>
-    <div class="sub">⚡ النسخة الاحترافية: إحصائيات بصرية، فواتير PDF عربية، فلترة ديون ذكية، ومزامنة لحظية.</div>
+    <h1>🧾 لوحة تسيير الاشتراكات <span class="version-badge">v13.1.0</span></h1>
+    <div class="sub">⚡ النسخة الاحترافية: إحصائيات بصرية، فلترة ذكية، طباعة PDF أصلية، ومزامنة لحظية.</div>
   </div>
 
   <div class="card">
@@ -273,10 +271,9 @@
 
       <div style="text-align: center; margin-top: 35px; font-size: 12px; color: #94a3b8; line-height: 1.6;">نشكركم على ثقتكم بنا 🤍<br><span style="font-size: 10px;">تم الإصدار بتاريخ <span id="recToday"></span></span></div>
     </div>
-    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #4f46e5; border-color: #4338ca; text-align: center;" onclick="window.printReceiptAction()">🖨️ طباعة أو حفظ PDF</button>
-      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #f59e0b; border-color: #d97706; text-align: center;" onclick="window.downloadReceiptPDF()">📥 تحميل كـ PDF (HD)</button>
-      <button class="btn primary" style="width: 100%; padding: 12px; font-size: 13px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppReceipt()">💬 إرسال واتساب</button>
+    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 12px 12px; display:flex; gap:10px;">
+      <button class="btn primary" style="flex:1; padding: 14px; font-size: 14px; border-radius: 12px; background: #4f46e5; border-color: #4338ca; text-align: center;" onclick="window.printReceiptAction()">🖨️ طباعة أو حفظ PDF</button>
+      <button class="btn primary" style="flex:1; padding: 14px; font-size: 14px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppReceipt()">💬 إرسال واتساب</button>
     </div>
   </div>
 </div>
@@ -308,10 +305,9 @@
         </div>
       </div>
     </div>
-    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 16px 16px; display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #0f172a; border-color: #000; text-align: center;" onclick="window.printIdCardAction()">🖨️ طباعة أو حفظ PDF</button>
-      <button class="btn primary" style="flex:1; min-width:45%; padding: 12px; font-size: 13px; border-radius: 12px; background: #f59e0b; border-color: #d97706; text-align: center;" onclick="window.downloadIdCardPDF()">📥 حفظ كـ PDF (HD)</button>
-      <button class="btn primary" style="width: 100%; padding: 12px; font-size: 13px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppIdCard()">💬 إرسال واتساب</button>
+    <div class="modalFooter no-print" style="background: #f8fafc; border-top: 1px solid #e2e8f0; border-radius: 0 0 16px 16px; display:flex; gap:10px;">
+      <button class="btn primary" style="flex:1; padding: 14px; font-size: 14px; border-radius: 12px; background: #0f172a; border-color: #000; text-align: center;" onclick="window.printIdCardAction()">🖨️ طباعة أو حفظ PDF</button>
+      <button class="btn primary" style="flex:1; padding: 14px; font-size: 14px; border-radius: 12px; background: #22c55e; border-color: #16a34a; text-align: center;" onclick="window.sendWhatsAppIdCard()">💬 إرسال واتساب</button>
     </div>
   </div>
 </div>
